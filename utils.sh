@@ -101,10 +101,10 @@ function create_cluster() {
     $OPENSHIFT_INSTALLER --dir "${assets_dir}" --log-level=debug create cluster
 
     # Workaround for https://bugzilla.redhat.com/show_bug.cgi?id=1816904
-    wait_for_workers
+    wait_for_cluster
 }
 
-wait_for_workers() {
+wait_for_cluster() {
     TIMEOUT_MINUTES=30
     if ! timeout ${TIMEOUT_MINUTES}m bash <<EOF
 while (( $(oc get nodes | grep "^worker" | wc -l) < $NUM_WORKERS )); do
@@ -122,6 +122,8 @@ EOF
         echo "$worker registered, waiting $TIMEOUT_MINUTES minutes for Ready condition ..."
         oc wait node/$worker --for=condition=Ready --timeout=$[${TIMEOUT_MINUTES} * 60]s
     done
+
+    oc wait clusteroperators --for=condition=Available --all --timeout=$[${TIMEOUT_MINUTES} * 60]s
 }
 
 function ipversion(){
@@ -440,7 +442,7 @@ EOF
 }
 
 function add_local_certificate_as_trusted() {
-    REGISTRY_CONFIG="registry-config"  
+    REGISTRY_CONFIG="registry-config"
     oc create configmap ${REGISTRY_CONFIG} \
       --from-file=${LOCAL_REGISTRY_DNS_NAME}..${LOCAL_REGISTRY_PORT}=${REGISTRY_DIR}/certs/${REGISTRY_CRT} -n openshift-config
     oc patch image.config.openshift.io/cluster --patch "{\"spec\":{\"additionalTrustedCA\":{\"name\":\"${REGISTRY_CONFIG}\"}}}" --type=merge
